@@ -15,13 +15,17 @@ const { resolve } = require("path");
 const { reject } = require("lodash");
 const { Headers } = require("node-fetch");
 const readline = require("readline");
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const path = require('path');
 
+const ENABLE_DOWNLOAD = false
 
 //load inq module
 inquirer.registerPrompt("fuzzypath", require("inquirer-fuzzy-path"));
 
 //adding useragent to avoid ip bans
 const headers = new Headers();
+let urlsArray = []
 
 
 const getChoice = () =>
@@ -81,7 +85,7 @@ const downloadMedia = async (item) => {
     const folder = "downloads/";
     if (!fs.existsSync(folder)) fs.mkdirSync(folder, { recrusive: true });
     // check for slideshow
-    if (item.images.length != 0) {
+    if (ENABLE_DOWNLOAD == true && item.images.length != 0) {
         console.log(chalk.green("[*] Downloading Sildeshow"));
 
         let index = 0;
@@ -120,17 +124,28 @@ const downloadMedia = async (item) => {
             );
             return;
         }
-        const downloadFile = fetch(item.url);
-        const file = fs.createWriteStream(folder + fileName);
 
-        downloadFile.then((res) => {
-            res.body.pipe(file);
-            file.on("finish", () => {
-                file.close();
-                resolve();
+        if(ENABLE_DOWNLOAD == true)
+        {
+            const downloadFile = fetch(item.url);
+            const file = fs.createWriteStream(folder + fileName);
+    
+            downloadFile.then((res) => {
+                res.body.pipe(file);
+                file.on("finish", () => {
+                    file.close();
+                    resolve();
+                });
+                file.on("error", (err) => reject(err));
             });
-            file.on("error", (err) => reject(err));
-        });
+    
+
+        } else {
+
+            // Convert the URL string into a JSON object and push it into the array
+            urlsArray.push({ url: item.url });
+        }
+
     }
 };
 
@@ -286,22 +301,75 @@ const getIdVideo = async (url) => {
         : idVideo;
 };
 
+
+
+function shuffleArray(array) {
+
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+}
+  
 (async () => {
+
+
+    // Access arguments (excluding the first two elements)
+    const args = process.argv.slice(2);
+
+    // Check if there are arguments provided
+    if (ENABLE_DOWNLOAD == false && args.length === 0) {
+        console.error('No arguments provided.');
+        process.exit(1); // Exit with an error code
+    }
+
+    // Handle arguments
+    console.log('Arguments received:', args);
+
+
     const header =
         "\r\n /$$$$$$$$ /$$$$$$ /$$   /$$ /$$$$$$$$ /$$$$$$  /$$   /$$       /$$$$$$$   /$$$$$$  /$$      /$$ /$$   /$$ /$$        /$$$$$$   /$$$$$$  /$$$$$$$  /$$$$$$$$ /$$$$$$$ \r\n|__  $$__/|_  $$_/| $$  /$$/|__  $$__//$$__  $$| $$  /$$/      | $$__  $$ /$$__  $$| $$  /$ | $$| $$$ | $$| $$       /$$__  $$ /$$__  $$| $$__  $$| $$_____/| $$__  $$\r\n   | $$     | $$  | $$ /$$/    | $$  | $$  \\ $$| $$ /$$/       | $$  \\ $$| $$  \\ $$| $$ /$$$| $$| $$$$| $$| $$      | $$  \\ $$| $$  \\ $$| $$  \\ $$| $$      | $$  \\ $$\r\n   | $$     | $$  | $$$$$/     | $$  | $$  | $$| $$$$$/        | $$  | $$| $$  | $$| $$/$$ $$ $$| $$ $$ $$| $$      | $$  | $$| $$$$$$$$| $$  | $$| $$$$$   | $$$$$$$/\r\n   | $$     | $$  | $$  $$     | $$  | $$  | $$| $$  $$        | $$  | $$| $$  | $$| $$$$_  $$$$| $$  $$$$| $$      | $$  | $$| $$__  $$| $$  | $$| $$__/   | $$__  $$\r\n   | $$     | $$  | $$\\  $$    | $$  | $$  | $$| $$\\  $$       | $$  | $$| $$  | $$| $$$/ \\  $$$| $$\\  $$$| $$      | $$  | $$| $$  | $$| $$  | $$| $$      | $$  \\ $$\r\n   | $$    /$$$$$$| $$ \\  $$   | $$  |  $$$$$$/| $$ \\  $$      | $$$$$$$/|  $$$$$$/| $$/   \\  $$| $$ \\  $$| $$$$$$$$|  $$$$$$/| $$  | $$| $$$$$$$/| $$$$$$$$| $$  | $$\r\n   |__/   |______/|__/  \\__/   |__/   \\______/ |__/  \\__/      |_______/  \\______/ |__/     \\__/|__/  \\__/|________/ \\______/ |__/  |__/|_______/ |________/|__/  |__/\r\n\n by n0l3r (https://github.com/n0l3r)\n";
     console.log(chalk.blue(header));
-    const choice = await getChoice();
+
+    let choice = null
+    let usernameInput = null
+
+    if(ENABLE_DOWNLOAD == true)
+    {
+        choice = await getChoice();
+
+    } else {
+
+        choice = {
+            choice: "Mass Download (Username)"
+        }
+
+        usernameInput = args[0]
+    }
+
     var listVideo = [];
+
     if (choice.choice === "Mass Download (Username)") {
-        const usernameInput = await getInput(
-            "Enter the username with @ (e.g. @username) : "
-        );
-        const username = usernameInput;
+
+        if(ENABLE_DOWNLOAD == true)
+        {
+            usernameInput = await getInput(
+                "Enter the username with @ (e.g. @username) : "
+            );
+    
+        } else {
+            username = usernameInput;
+
+        }
+
         listVideo = await getListVideoByUsername(username);
+
         if (listVideo.length === 0) {
             console.log(chalk.yellow("[!] Error: No video found"));
             exit();
         }
+
     } else if (choice.choice === "Mass Download with (txt)") {
         var urls = [];
         // Get URL from file
@@ -383,6 +451,16 @@ const getIdVideo = async (url) => {
     console.log(chalk.green(`[!] Found ${listVideo.length} video`));
 
     let deleted_videos_count = 0;
+
+    //Select DOWNLOAD_LIMIT videos from listVideo and randomize
+    if(listVideo != null)
+    {
+        listVideo = shuffleArray(listVideo);
+        listVideo = listVideo.slice(0, 3);
+    
+    }
+      
+
     for (var i = 0; i < listVideo.length; i++) {
         console.log(
             chalk.green(`[*] Downloading video ${i + 1} of ${listVideo.length}`)
@@ -401,12 +479,13 @@ const getIdVideo = async (url) => {
         }
 
         downloadMedia(data)
-            .then(() => {
-                console.log(chalk.green("[+] Downloaded successfully"));
-            })
-            .catch((err) => {
-                console.log(chalk.red("[X] Error: " + err));
-            });
+        .then(() => {
+            console.log(chalk.green("[+] Downloaded successfully"));
+        })
+        .catch((err) => {
+            console.log(chalk.red("[X] Error: " + err));
+        });
+
     }
 
     if (deleted_videos_count > 0) {
@@ -416,4 +495,33 @@ const getIdVideo = async (url) => {
             )
         );
     }
+
+
+    // Convert the data to a JSON string
+    const jsonData = JSON.stringify(urlsArray, null, 2); // `null` and `2` are for pretty-printing
+
+    // Define the output folder and file path
+    const outputDir = path.join(__dirname, 'output');
+    const outputPath = path.join(outputDir, 'output.json');
+
+    // Create the output directory if it does not exist
+    if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Write JSON data to the file
+    fs.writeFile(outputPath, jsonData, (err) => {
+        if (err) {
+            console.error('Error writing file:', err);
+            process.exit(1); 
+
+        } else {
+            console.log('File successfully written to', outputPath);
+            process.exit(0); 
+
+        }
+    });   
+    
+
+
 })();
